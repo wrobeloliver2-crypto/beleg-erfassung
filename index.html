@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Beleg">
+<meta name="theme-color" content="#1a1a1a">
+<title>Beleg-App</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@500;600&display=swap');
+
+  :root {
+    --bg: #111110;
+    --surface: #1c1c1a;
+    --surface2: #242422;
+    --border: #2e2e2c;
+    --text: #f0ede8;
+    --muted: #7a7870;
+    --accent-pilates: #d9a49a;
+    --accent-physio: #55725e;
+    --accent-amex: #a8c4d4;
+    --accent-giro: #c4b8a4;
+    --accent-mc: #d4a574;
+    --radius: 14px;
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: calc(var(--safe-top) + 18px) 20px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent-pilates), var(--accent-physio));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: -0.3px;
+  }
+  .header .step-indicator {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  /* ── Steps ── */
+  .step-bar {
+    display: flex;
+    padding: 12px 20px;
+    gap: 4px;
+  }
+  .step-dot {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+  .step-dot.active { background: var(--accent-pilates); }
+  .step-dot.done { background: var(--accent-physio); }
+
+  /* ── Screens ── */
+  .screen { display: none; padding: 20px; padding-bottom: calc(var(--safe-bottom) + 20px); }
+  .screen.active { display: block; }
+
+  .screen-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    line-height: 1.2;
+  }
+  .screen-sub {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  /* ── Photo Upload ── */
+  .photo-area {
+    width: 100%;
+    aspect-ratio: 4/3;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .photo-area:active { border-color: var(--accent-pilates); background: var(--surface2); }
+  .photo-area.has-photo { border-style: solid; border-color: var(--accent-physio); }
+  .photo-area img {
+    position: absolute;
+    inset: 0; width: 100%; height: 100%;
+    object-fit: cover;
+    border-radius: calc(var(--radius) - 2px);
+  }
+  .photo-area .photo-overlay {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    padding: 20px 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .photo-icon { font-size: 32px; }
+  .photo-hint { font-size: 14px; color: var(--muted); }
+  #fileInput { display: none; }
+
+  /* ── Analysing ── */
+  .analyzing-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 16px;
+    display: none;
+  }
+  .analyzing-box.visible { display: block; }
+  .pulse-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .pulse-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-pilates);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+  .pulse-label { font-size: 14px; color: var(--muted); }
+
+  /* ── Data Fields ── */
+  .data-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .data-field {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .data-field.wide { grid-column: 1 / -1; }
+  .data-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .data-value { font-size: 15px; font-weight: 500; }
+  .data-value input {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    width: 100%;
+    outline: none;
+  }
+
+  /* ── Choice Cards ── */
+  .choice-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .choice-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .choice-card:active { transform: scale(0.98); }
+  .choice-card.selected {
+    border-color: var(--accent-pilates);
+    background: rgba(217, 164, 154, 0.08);
+  }
+  .choice-card.selected-physio {
+    border-color: var(--accent-physio);
+    background: rgba(85, 114, 94, 0.08);
+  }
+  .choice-card .card-icon { font-size: 22px; flex-shrink: 0; }
+  .choice-card .card-text { flex: 1; }
+  .choice-card .card-title { font-size: 15px; font-weight: 500; }
+  .choice-card .card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .choice-check {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.18s;
+  }
+  .choice-card.selected .choice-check,
+  .choice-card.selected-physio .choice-check {
+    background: var(--accent-pilates);
+    border-color: var(--accent-pilates);
+  }
+  .choice-card.selected-physio .choice-check { background: var(--accent-physio); border-color: var(--accent-physio); }
+  .choice-check::after { content: '✓'; font-size: 12px; color: white; display: none; }
+  .choice-card.selected .choice-check::after,
+  .choice-card.selected-physio .choice-check::after { display: block; }
+
+  /* ── Payment cards (3-col) ── */
+  .payment-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .payment-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 10px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+  }
+  .payment-card:active { transform: scale(0.96); }
+  .payment-card .pm-icon { font-size: 26px; }
+  .payment-card .pm-name { font-size: 13px; font-weight: 500; }
+  .payment-card.sel-amex { border-color: var(--accent-amex); background: rgba(168,196,212,0.08); }
+  .payment-card.sel-giro { border-color: var(--accent-giro); background: rgba(196,184,164,0.08); }
+  .payment-card.sel-mc { border-color: var(--accent-mc); background: rgba(212,165,116,0.08); }
+
+  /* ── Firma cards (2-col) ── */
+  .firma-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .firma-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 14px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+  }
+  .firma-card:active { transform: scale(0.97); }
+  .firma-card .f-icon { font-size: 28px; }
+  .firma-card .f-name { font-size: 14px; font-weight: 600; }
+  .firma-card .f-mail { font-size: 11px; color: var(--muted); }
+  .firma-card.sel-pilates { border-color: var(--accent-pilates); background: rgba(217,164,154,0.08); }
+  .firma-card.sel-physio { border-color: var(--accent-physio); background: rgba(85,114,94,0.08); }
+
+  /* ── Summary ── */
+  .summary-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .summary-photo {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+  }
+  .summary-rows { padding: 16px; }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-row .sr-label { color: var(--muted); }
+  .summary-row .sr-value { font-weight: 500; text-align: right; max-width: 60%; }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-pilates { background: rgba(217,164,154,0.2); color: var(--accent-pilates); }
+  .badge-physio { background: rgba(85,114,94,0.2); color: #7aad87; }
+
+  /* ── Buttons ── */
+  .btn {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s;
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent-pilates), #c48c82);
+    color: white;
+  }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-share {
+    background: linear-gradient(135deg, var(--accent-physio), #3d5944);
+    color: white;
+  }
+
+  /* ── Notiz ── */
+  .notiz-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    resize: none;
+    outline: none;
+    min-height: 80px;
+    transition: border-color 0.2s;
+  }
+  .notiz-input:focus { border-color: var(--accent-pilates); }
+  .notiz-input::placeholder { color: var(--muted); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: calc(var(--safe-bottom) + 20px);
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 999;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── Divider ── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0 16px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 10px;
+    font-weight: 500;
+  }
+
+  .mt { margin-top: 20px; }
+
+  /* ── Reset button ── */
+  .reset-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 10px 0;
+    width: 100%;
+    text-align: center;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">🧾</div>
+  <h1>Belegerfassung</h1>
+  <span class="step-indicator" id="stepLabel">Schritt 1 von 5</span>
+</div>
+
+<div class="step-bar" id="stepBar">
+  <div class="step-dot active" id="dot1"></div>
+  <div class="step-dot" id="dot2"></div>
+  <div class="step-dot" id="dot3"></div>
+  <div class="step-dot" id="dot4"></div>
+  <div class="step-dot" id="dot5"></div>
+</div>
+
+<!-- SCREEN 1: Foto -->
+<div class="screen active" id="screen1">
+  <div class="screen-title">Beleg fotografieren</div>
+  <div class="screen-sub">Mach ein Foto oder wähle ein Bild aus deiner Galerie.</div>
+
+  <div class="photo-area" id="photoArea" onclick="document.getElementById('fileInput').click()">
+    <span class="photo-icon">📷</span>
+    <span class="photo-hint">Tippen um Foto aufzunehmen</span>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" capture="environment">
+
+  <div class="analyzing-box" id="analyzingBox">
+    <div class="pulse-row">
+      <div class="pulse-dot"></div>
+      <span class="pulse-label" id="analyzeStatus">KI analysiert deinen Beleg…</span>
+    </div>
+    <div class="data-grid" id="dataGrid" style="display:none">
+      <div class="data-field wide">
+        <div class="data-label">Händler / Beschreibung</div>
+        <div class="data-value"><input type="text" id="fieldHaendler" placeholder="–"></div>
+      </div>
+      <div class="data-field">
+        <div class="data-label">Datum</div>
+        <div class="data-value"><input type="text" id="fieldDatum" placeholder="–"></div>
+      </div>
+      <div class="data-field">
+        <div class="data-label">Betrag brutto</div>
+        <div class="data-value"><input type="text" id="fieldBetrag" placeholder="–"></div>
+      </div>
+      <div class="data-field">
+        <div class="data-label">MwSt.</div>
+        <div class="data-value"><input type="text" id="fieldMwst" placeholder="–"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="btn1" onclick="goTo(2)" disabled>Weiter →</button>
+</div>
+
+<!-- SCREEN 2: Kategorie -->
+<div class="screen" id="screen2">
+  <div class="screen-title">Kategorie wählen</div>
+  <div class="screen-sub">Wähle die passende SKR-03-Buchungskategorie für diesen Beleg.</div>
+
+  <div class="choice-grid" id="kategorieListe"></div>
+
+  <button class="btn btn-primary" id="btn2" onclick="goTo(3)" disabled>Weiter →</button>
+  <button class="btn btn-secondary" onclick="goTo(1)">← Zurück</button>
+</div>
+
+<!-- SCREEN 3: Zahlungsmittel -->
+<div class="screen" id="screen3">
+  <div class="screen-title">Zahlungsmittel</div>
+  <div class="screen-sub">Womit wurde dieser Beleg bezahlt?</div>
+
+  <div class="payment-grid">
+    <div class="payment-card" id="pm-amex" onclick="selectPayment('amex')">
+      <span class="pm-icon">💳</span>
+      <span class="pm-name">American Express</span>
+    </div>
+    <div class="payment-card" id="pm-giro" onclick="selectPayment('giro')">
+      <span class="pm-icon">🏦</span>
+      <span class="pm-name">EC / Giro</span>
+    </div>
+    <div class="payment-card" id="pm-mc" onclick="selectPayment('mc')">
+      <span class="pm-icon">💳</span>
+      <span class="pm-name">Mastercard</span>
+    </div>
+    <div class="payment-card" id="pm-bar" onclick="selectPayment('bar')">
+      <span class="pm-icon">💵</span>
+      <span class="pm-name">Bar</span>
+    </div>
+    <div class="payment-card" id="pm-ueberweisung" onclick="selectPayment('ueberweisung')">
+      <span class="pm-icon">📱</span>
+      <span class="pm-name">Überweisung</span>
+    </div>
+    <div class="payment-card" id="pm-sonstige" onclick="selectPayment('sonstige')">
+      <span class="pm-icon">❓</span>
+      <span class="pm-name">Sonstige</span>
+    </div>
+  </div>
+
+  <div class="mt">
+    <div class="section-label">Optionale Notiz</div>
+    <textarea class="notiz-input" id="notizInput" placeholder="z.B. Mitarbeiter-Namen, Anlass, Projekt…" rows="3"></textarea>
+  </div>
+
+  <button class="btn btn-primary" id="btn3" onclick="goTo(4)" disabled>Weiter →</button>
+  <button class="btn btn-secondary" onclick="goTo(2)">← Zurück</button>
+</div>
+
+<!-- SCREEN 4: Firma -->
+<div class="screen" id="screen4">
+  <div class="screen-title">Firma wählen</div>
+  <div class="screen-sub">An welche Buchhaltung soll der Beleg gesendet werden?</div>
+
+  <div class="firma-grid">
+    <div class="firma-card" id="f-pilates" onclick="selectFirma('pilates')">
+      <span class="f-icon">🧘</span>
+      <span class="f-name">Pilates Company</span>
+      <span class="f-mail">buchhaltung@<br>pilatescompany.de</span>
+    </div>
+    <div class="firma-card" id="f-physio" onclick="selectFirma('physio')">
+      <span class="f-icon">🏥</span>
+      <span class="f-name">PhysioPro</span>
+      <span class="f-mail">buchhaltung@<br>physioproluebeck.de</span>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="btn4" onclick="goTo(5)" disabled>Weiter →</button>
+  <button class="btn btn-secondary" onclick="goTo(3)">← Zurück</button>
+</div>
+
+<!-- SCREEN 5: Zusammenfassung & Versand -->
+<div class="screen" id="screen5">
+  <div class="screen-title">Beleg senden</div>
+  <div class="screen-sub">Prüfe alle Angaben und teile das PDF.</div>
+
+  <div class="summary-box">
+    <img class="summary-photo" id="summaryPhoto" src="" alt="Beleg">
+    <div class="summary-rows" id="summaryRows"></div>
+  </div>
+
+  <button class="btn btn-share" onclick="generateAndShare()">
+    <span>📤</span> PDF erstellen & teilen
+  </button>
+  <button class="btn btn-secondary" onclick="goTo(4)">← Zurück</button>
+  <button class="reset-btn" onclick="resetApp()">Neuen Beleg erfassen</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──
+const state = {
+  imageFile: null,
+  imageDataUrl: null,
+  haendler: '', datum: '', betrag: '', mwst: '',
+  kategorie: null, kategorieLabel: null, skrKonto: null,
+  payment: null,
+  firma: null, firmaLabel: null, firmaEmail: null,
+  notiz: ''
+};
+
+const FIRMA_DATA = {
+  pilates: { label: 'Pilates Company Lübeck', email: 'pilatescompany@getmyinvoices.net' },
+  physio:  { label: 'PhysioPro Lübeck',       email: 'physioproluebeck@getmyinvoices.net' }
+};
+
+const PM_LABELS = {
+  amex: 'American Express', giro: 'EC / Girokarte',
+  mc: 'Mastercard', bar: 'Bar', ueberweisung: 'Überweisung', sonstige: 'Sonstige'
+};
+
+// ── Navigation ──
+let currentStep = 1;
+function goTo(n) {
+  document.getElementById('screen' + currentStep).classList.remove('active');
+  currentStep = n;
+  document.getElementById('screen' + n).classList.add('active');
+  updateStepUI();
+  if (n === 5) buildSummary();
+}
+
+function updateStepUI() {
+  document.getElementById('stepLabel').textContent = `Schritt ${currentStep} von 5`;
+  for (let i = 1; i <= 5; i++) {
+    const dot = document.getElementById('dot' + i);
+    dot.className = 'step-dot' + (i < currentStep ? ' done' : i === currentStep ? ' active' : '');
+  }
+}
+
+// ── File Input ──
+document.getElementById('fileInput').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  state.imageFile = file;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    state.imageDataUrl = ev.target.result;
+    // Show preview
+    const area = document.getElementById('photoArea');
+    area.classList.add('has-photo');
+    area.innerHTML = `
+      <img src="${state.imageDataUrl}" alt="Beleg">
+      <div class="photo-overlay">📷 <span>Tippen zum Ändern</span></div>
+    `;
+    area.onclick = () => document.getElementById('fileInput').click();
+    // Analyze
+    await analyzeBeleg();
+  };
+  reader.readAsDataURL(file);
+});
+
+// ── KI Analyse ──
+async function analyzeBeleg() {
+  const box = document.getElementById('analyzingBox');
+  box.classList.add('visible');
+  document.getElementById('analyzeStatus').textContent = 'KI analysiert deinen Beleg…';
+  document.getElementById('dataGrid').style.display = 'none';
+  document.getElementById('btn1').disabled = true;
+
+  // Convert image to base64 (strip prefix)
+  const base64 = state.imageDataUrl.split(',')[1];
+  const mediaType = state.imageFile.type || 'image/jpeg';
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: base64 }
+            },
+            {
+              type: 'text',
+              text: `Analysiere diesen Kassenbon/Beleg. Antworte NUR mit einem JSON-Objekt, ohne Markdown, ohne Backticks, genau dieses Format:
+{
+  "haendler": "Name des Händlers oder Lieferanten",
+  "datum": "Datum im Format TT.MM.JJJJ",
+  "betrag": "Bruttobetrag mit Euro-Zeichen, z.B. 24,90 €",
+  "mwst": "MwSt-Betrag oder Satz, z.B. 19% / 3,97 €",
+  "kategorien": [
+    {"label": "Kategoriename SKR03", "konto": "Kontonummer SKR03", "grund": "1 Satz warum"},
+    {"label": "Kategoriename SKR03", "konto": "Kontonummer SKR03", "grund": "1 Satz warum"},
+    {"label": "Kategoriename SKR03", "konto": "Kontonummer SKR03", "grund": "1 Satz warum"}
+  ]
+}
+Gib genau 3 passende SKR-03-Kategorievorschläge. Wenn Felder nicht lesbar sind, setze "nicht erkannt".`
+            }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const raw = data.content.map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    state.haendler = parsed.haendler || '';
+    state.datum = parsed.datum || '';
+    state.betrag = parsed.betrag || '';
+    state.mwst = parsed.mwst || '';
+
+    document.getElementById('fieldHaendler').value = state.haendler;
+    document.getElementById('fieldDatum').value = state.datum;
+    document.getElementById('fieldBetrag').value = state.betrag;
+    document.getElementById('fieldMwst').value = state.mwst;
+
+    // Sync edits back to state
+    ['Haendler','Datum','Betrag','Mwst'].forEach(f => {
+      document.getElementById('field'+f).addEventListener('input', e => {
+        state[f.toLowerCase()] = e.target.value;
+      });
+    });
+
+    document.getElementById('analyzeStatus').textContent = '✓ Beleg erkannt — Felder prüfen & anpassen';
+    document.getElementById('dataGrid').style.display = 'grid';
+
+    // Build Kategorie-Cards
+    buildKategorieCards(parsed.kategorien);
+
+    document.getElementById('btn1').disabled = false;
+
+  } catch (err) {
+    document.getElementById('analyzeStatus').textContent = '⚠️ Analyse fehlgeschlagen — Daten manuell eingeben';
+    document.getElementById('dataGrid').style.display = 'grid';
+    buildKategorieCards([]);
+    document.getElementById('btn1').disabled = false;
+  }
+}
+
+// ── Kategorie Cards ──
+function buildKategorieCards(kategorien) {
+  const liste = document.getElementById('kategorieListe');
+  liste.innerHTML = '';
+
+  const icons = ['🍽️','🧹','🖥️','📦','🚗','💡','📋','🤝','🏥'];
+
+  const all = [...kategorien, { label: 'Sonstiges', konto: '6300', grund: 'Nicht zuordenbar' }];
+
+  all.forEach((k, i) => {
+    const icon = icons[i % icons.length];
+    const card = document.createElement('div');
+    card.className = 'choice-card';
+    card.innerHTML = `
+      <span class="card-icon">${icon}</span>
+      <div class="card-text">
+        <div class="card-title">${k.label}</div>
+        <div class="card-sub">SKR03 · ${k.konto}${k.grund ? ' · ' + k.grund : ''}</div>
+      </div>
+      <div class="choice-check"></div>
+    `;
+    card.onclick = () => {
+      document.querySelectorAll('#kategorieListe .choice-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      state.kategorie = k.konto;
+      state.kategorieLabel = k.label;
+      document.getElementById('btn2').disabled = false;
+    };
+    liste.appendChild(card);
+  });
+}
+
+// ── Payment ──
+function selectPayment(pm) {
+  document.querySelectorAll('.payment-card').forEach(c => c.className = 'payment-card');
+  const map = { amex: 'sel-amex', giro: 'sel-giro', mc: 'sel-mc', bar: 'sel-mc', ueberweisung: 'sel-giro', sonstige: 'sel-giro' };
+  document.getElementById('pm-' + pm).classList.add(map[pm] || 'sel-giro');
+  state.payment = pm;
+  document.getElementById('btn3').disabled = false;
+}
+
+// ── Firma ──
+function selectFirma(f) {
+  document.querySelectorAll('.firma-card').forEach(c => c.className = 'firma-card');
+  document.getElementById('f-' + f).classList.add(f === 'pilates' ? 'sel-pilates' : 'sel-physio');
+  state.firma = f;
+  state.firmaLabel = FIRMA_DATA[f].label;
+  state.firmaEmail = FIRMA_DATA[f].email;
+  document.getElementById('btn4').disabled = false;
+}
+
+// ── Summary ──
+function buildSummary() {
+  state.notiz = document.getElementById('notizInput').value;
+  document.getElementById('summaryPhoto').src = state.imageDataUrl;
+  const rows = [
+    ['Händler', state.haendler || '–'],
+    ['Datum', state.datum || '–'],
+    ['Betrag', state.betrag || '–'],
+    ['MwSt.', state.mwst || '–'],
+    ['Kategorie', `${state.kategorieLabel} (${state.kategorie})`],
+    ['Zahlungsmittel', PM_LABELS[state.payment] || state.payment],
+    ['Firma', `<span class="badge badge-${state.firma}">${state.firmaLabel}</span>`],
+    state.notiz ? ['Notiz', state.notiz] : null
+  ].filter(Boolean);
+
+  document.getElementById('summaryRows').innerHTML = rows.map(([l, v]) =>
+    `<div class="summary-row"><span class="sr-label">${l}</span><span class="sr-value">${v}</span></div>`
+  ).join('');
+}
+
+// ── PDF & Share ──
+async function generateAndShare() {
+  showToast('📄 PDF wird erstellt…');
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = 210, pageH = 297;
+    const margin = 16;
+
+    // Header bar
+    if (state.firma === 'physio') {
+      doc.setFillColor(85, 114, 94);
+    } else {
+      doc.setFillColor(217, 164, 154);
+    }
+    doc.rect(0, 0, pageW, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BELEGERFASSUNG', margin, 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(state.firmaLabel, pageW - margin, 14, { align: 'right' });
+
+    // Meta info
+    let y = 32;
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Erfasst am: ${new Date().toLocaleDateString('de-DE')}`, margin, y);
+    doc.text(`Zahlungsmittel: ${PM_LABELS[state.payment] || state.payment}`, pageW/2, y);
+    y += 6;
+    doc.text(`SKR03-Konto: ${state.kategorie} · ${state.kategorieLabel}`, margin, y);
+    y += 10;
+
+    // Divider
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageW - margin, y);
+    y += 8;
+
+    // Fields table
+    const fields = [
+      ['Händler / Lieferant', state.haendler],
+      ['Belegdatum', state.datum],
+      ['Bruttobetrag', state.betrag],
+      ['MwSt.', state.mwst],
+    ];
+    if (state.notiz) fields.push(['Notiz', state.notiz]);
+
+    doc.setFontSize(9);
+    fields.forEach(([label, value]) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(120, 120, 120);
+      doc.text(label, margin, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(30, 30, 30);
+      doc.text(value || '–', margin + 52, y);
+      y += 7;
+    });
+
+    y += 6;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageW - margin, y);
+    y += 8;
+
+    // Beleg image
+    if (state.imageDataUrl) {
+      const imgW = pageW - margin * 2;
+      const imgH = 120;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text('BELEGFOTO', margin, y);
+      y += 4;
+      doc.addImage(state.imageDataUrl, 'JPEG', margin, y, imgW, imgH);
+      y += imgH + 10;
+    }
+
+    // Footer
+    doc.setDrawColor(220, 220, 220);
+    doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
+    doc.setFontSize(7);
+    doc.setTextColor(160, 160, 160);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${state.firmaLabel} · ${state.firmaEmail}`, margin, pageH - 8);
+    doc.text(`Beleg-App · ${new Date().toLocaleDateString('de-DE')}`, pageW - margin, pageH - 8, { align: 'right' });
+
+    // Export
+    const haendlerClean = (state.haendler || 'beleg').replace(/[^a-zA-Z0-9äöüÄÖÜ]/g, '_').toLowerCase();
+    const filename = `beleg_${haendlerClean}_${(state.datum || '').replace(/\./g, '-')}.pdf`;
+    const pdfBlob = doc.output('blob');
+    const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      await navigator.share({
+        title: `Beleg: ${state.haendler || ''} · ${state.datum || ''}`,
+        text: `${state.kategorieLabel} · ${PM_LABELS[state.payment]} · ${state.firmaLabel}`,
+        files: [pdfFile]
+      });
+      showToast('✅ PDF geteilt!');
+    } else {
+      // Fallback: download
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('✅ PDF heruntergeladen');
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      showToast('⚠️ Fehler: ' + err.message);
+    }
+  }
+}
+
+// ── Reset ──
+function resetApp() {
+  Object.assign(state, {
+    imageFile: null, imageDataUrl: null,
+    haendler: '', datum: '', betrag: '', mwst: '',
+    kategorie: null, kategorieLabel: null,
+    payment: null, firma: null, firmaLabel: null, firmaEmail: null, notiz: ''
+  });
+  const area = document.getElementById('photoArea');
+  area.className = 'photo-area';
+  area.innerHTML = '<span class="photo-icon">📷</span><span class="photo-hint">Tippen um Foto aufzunehmen</span>';
+  area.onclick = () => document.getElementById('fileInput').click();
+  document.getElementById('fileInput').value = '';
+  document.getElementById('analyzingBox').classList.remove('visible');
+  document.getElementById('dataGrid').style.display = 'none';
+  document.getElementById('btn1').disabled = true;
+  document.getElementById('btn2').disabled = true;
+  document.getElementById('btn3').disabled = true;
+  document.getElementById('btn4').disabled = true;
+  document.getElementById('notizInput').value = '';
+  document.querySelectorAll('.payment-card').forEach(c => c.className = 'payment-card');
+  document.querySelectorAll('.firma-card').forEach(c => c.className = 'firma-card');
+  goTo(1);
+}
+
+// ── Toast ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── PWA Manifest (inline) ──
+const manifestData = {
+  name: 'Belegerfassung', short_name: 'Beleg',
+  start_url: './', display: 'standalone',
+  background_color: '#111110', theme_color: '#1a1a1a',
+  icons: [{ src: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>', sizes: '192x192', type: 'image/svg+xml' }]
+};
+const blob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
+const manifestUrl = URL.createObjectURL(blob);
+const link = document.createElement('link');
+link.rel = 'manifest';
+link.href = manifestUrl;
+document.head.appendChild(link);
+</script>
+</body>
+</html>
