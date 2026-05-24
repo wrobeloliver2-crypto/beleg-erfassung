@@ -237,6 +237,7 @@
     <img class="summary-photo" id="summaryPhoto" src="" alt="Beleg">
     <div class="summary-rows" id="summaryRows"></div>
   </div>
+  <button class="btn btn-secondary" onclick="previewPDF()"><span>👁️</span> PDF Vorschau</button>
   <button class="btn btn-share" onclick="generateAndShare()"><span>📤</span> PDF erstellen & teilen</button>
   <button class="btn btn-secondary" onclick="goTo(4)">← Zurück</button>
   <button class="reset-btn" onclick="resetApp()">Neuen Beleg erfassen</button>
@@ -359,12 +360,13 @@ let cropState = { img:null, rect:null, dragging:null, startX:0, startY:0, startR
 function showCropOverlay(imageDataUrl) {
   const overlay = document.getElementById('cropOverlay');
   overlay.classList.add('active');
-  const wrap = document.getElementById('cropWrap');
   const canvas = document.getElementById('cropCanvas');
 
   const img = new Image();
   img.onload = () => {
-    const ww = window.innerWidth, wh = window.innerHeight - 120 - 80;
+    // Wait for overlay to be rendered before measuring
+    requestAnimationFrame(() => {
+    const ww = window.innerWidth, wh = window.innerHeight - 140 - 90;
     const scale = Math.min(ww/img.width, wh/img.height);
     const dw = Math.round(img.width*scale), dh = Math.round(img.height*scale);
     const ox = Math.round((ww-dw)/2), oy = Math.round((wh-dh)/2);
@@ -389,6 +391,7 @@ function showCropOverlay(imageDataUrl) {
     };
 
     drawCrop();
+    }); // end requestAnimationFrame
   };
   img.src = imageDataUrl;
 }
@@ -656,59 +659,67 @@ function buildSummary() {
 }
 
 // ── PDF & Share ──
+async function previewPDF() {
+  showToast('📄 Vorschau wird erstellt…');
+  try {
+    const pdfBlob = await buildPDFBlob();
+    const url = URL.createObjectURL(pdfBlob);
+    window.open(url, '_blank');
+  } catch(err) {
+    showToast('⚠️ Fehler: ' + err.message);
+  }
+}
+
+async function buildPDFBlob() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const pW=210, pH=297, m=16;
+  if (state.firma==='physio') doc.setFillColor(85,114,94);
+  else doc.setFillColor(217,164,154);
+  doc.rect(0,0,pW,22,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text('BELEGERFASSUNG', m, 14);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text(state.firmaLabel||'', pW-m, 14, {align:'right'});
+  let y=32;
+  doc.setTextColor(40,40,40); doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text(`Erfasst am: ${new Date().toLocaleDateString('de-DE')}`, m, y);
+  doc.text(`Zahlungsmittel: ${PM_LABELS[state.payment]||state.payment||''}`, pW/2, y);
+  y+=6;
+  doc.text(`SKR03: ${state.kategorie||''} · ${state.kategorieLabel||''}`, m, y);
+  y+=10;
+  doc.setDrawColor(200,200,200); doc.line(m,y,pW-m,y); y+=8;
+  const fields=[['Händler / Lieferant',state.haendler],['Belegdatum',state.datum],['Bruttobetrag',state.betrag],['MwSt.',state.mwst]];
+  if (state.notiz) fields.push(['Notiz',state.notiz]);
+  fields.forEach(([label,value]) => {
+    doc.setFont('helvetica','bold'); doc.setTextColor(120,120,120); doc.text(label,m,y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30); doc.text(value||'–',m+52,y);
+    y+=7;
+  });
+  y+=6; doc.setDrawColor(200,200,200); doc.line(m,y,pW-m,y); y+=8;
+  if (state.imageDataUrl) {
+    const iW=pW-m*2, iH=110;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(100,100,100);
+    doc.text('BELEGFOTO',m,y); y+=4;
+    doc.addImage(state.imageDataUrl,'JPEG',m,y,iW,iH);
+  }
+  doc.setDrawColor(220,220,220); doc.line(m,pH-14,pW-m,pH-14);
+  doc.setFontSize(7); doc.setTextColor(160,160,160); doc.setFont('helvetica','normal');
+  doc.text(`${state.firmaLabel||''} · ${state.firmaEmail||''}`, m, pH-8);
+  doc.text(`Beleg-App · ${new Date().toLocaleDateString('de-DE')}`, pW-m, pH-8, {align:'right'});
+  return doc.output('blob');
+}
+
 async function generateAndShare() {
   showToast('📄 PDF wird erstellt…');
   try {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
-    const pW=210, pH=297, m=16;
-
-    if (state.firma==='physio') doc.setFillColor(85,114,94);
-    else doc.setFillColor(217,164,154);
-    doc.rect(0,0,pW,22,'F');
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(13); doc.setFont('helvetica','bold');
-    doc.text('BELEGERFASSUNG', m, 14);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9);
-    doc.text(state.firmaLabel, pW-m, 14, {align:'right'});
-
-    let y=32;
-    doc.setTextColor(40,40,40); doc.setFontSize(9); doc.setFont('helvetica','normal');
-    doc.text(`Erfasst am: ${new Date().toLocaleDateString('de-DE')}`, m, y);
-    doc.text(`Zahlungsmittel: ${PM_LABELS[state.payment]||state.payment}`, pW/2, y);
-    y+=6;
-    doc.text(`SKR03: ${state.kategorie} · ${state.kategorieLabel}`, m, y);
-    y+=10;
-    doc.setDrawColor(200,200,200); doc.line(m,y,pW-m,y); y+=8;
-
-    const fields=[['Händler / Lieferant',state.haendler],['Belegdatum',state.datum],['Bruttobetrag',state.betrag],['MwSt.',state.mwst]];
-    if (state.notiz) fields.push(['Notiz',state.notiz]);
-    fields.forEach(([label,value]) => {
-      doc.setFont('helvetica','bold'); doc.setTextColor(120,120,120); doc.text(label,m,y);
-      doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30); doc.text(value||'–',m+52,y);
-      y+=7;
-    });
-    y+=6; doc.setDrawColor(200,200,200); doc.line(m,y,pW-m,y); y+=8;
-
-    if (state.imageDataUrl) {
-      const iW=pW-m*2, iH=110;
-      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(100,100,100);
-      doc.text('BELEGFOTO',m,y); y+=4;
-      doc.addImage(state.imageDataUrl,'JPEG',m,y,iW,iH); y+=iH+10;
-    }
-
-    doc.setDrawColor(220,220,220); doc.line(m,pH-14,pW-m,pH-14);
-    doc.setFontSize(7); doc.setTextColor(160,160,160); doc.setFont('helvetica','normal');
-    doc.text(`${state.firmaLabel} · ${state.firmaEmail}`, m, pH-8);
-    doc.text(`Beleg-App · ${new Date().toLocaleDateString('de-DE')}`, pW-m, pH-8, {align:'right'});
-
+    const pdfBlob = await buildPDFBlob();
     const haendlerClean=(state.haendler||'beleg').replace(/[^a-zA-Z0-9äöüÄÖÜ]/g,'_').toLowerCase();
     const filename=`beleg_${haendlerClean}_${(state.datum||'').replace(/\./g,'-')}.pdf`;
-    const pdfBlob=doc.output('blob');
     const pdfFile=new File([pdfBlob],filename,{type:'application/pdf'});
-
     if (navigator.share && navigator.canShare && navigator.canShare({files:[pdfFile]})) {
-      await navigator.share({ title:`Beleg: ${state.haendler||''} · ${state.datum||''}`, text:`${state.kategorieLabel} · ${PM_LABELS[state.payment]} · ${state.firmaLabel}`, files:[pdfFile] });
+      await navigator.share({ title:`Beleg: ${state.haendler||''} · ${state.datum||''}`, text:`${state.kategorieLabel||''} · ${PM_LABELS[state.payment]||''} · ${state.firmaLabel||''}`, files:[pdfFile] });
       showToast('✅ PDF geteilt!');
     } else {
       const url=URL.createObjectURL(pdfBlob);
