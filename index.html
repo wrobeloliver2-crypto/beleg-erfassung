@@ -361,6 +361,10 @@ function showCropOverlay(imageDataUrl) {
   const overlay = document.getElementById('cropOverlay');
   overlay.classList.add('active');
   const canvas = document.getElementById('cropCanvas');
+  // Prevent tap-through from camera button to crop buttons
+  const btns = overlay.querySelectorAll('.crop-btn');
+  btns.forEach(b => b.style.pointerEvents = 'none');
+  setTimeout(() => btns.forEach(b => b.style.pointerEvents = ''), 600);
 
   const img = new Image();
   img.onload = () => {
