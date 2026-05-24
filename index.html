@@ -364,7 +364,7 @@ function showCropOverlay(imageDataUrl) {
 
   const img = new Image();
   img.onload = () => {
-    const ww = wrap.clientWidth, wh = wrap.clientHeight;
+    const ww = window.innerWidth, wh = window.innerHeight - 120 - 80;
     const scale = Math.min(ww/img.width, wh/img.height);
     const dw = Math.round(img.width*scale), dh = Math.round(img.height*scale);
     const ox = Math.round((ww-dw)/2), oy = Math.round((wh-dh)/2);
@@ -595,7 +595,7 @@ Gib genau 3 passende SKR-03-Kategorievorschläge. Nicht erkennbare Felder: "nich
     document.getElementById('btn1').disabled = false;
 
   } catch(err) {
-    document.getElementById('analyzeStatus').textContent = '⚠️ Analyse fehlgeschlagen — Daten manuell eingeben';
+    document.getElementById('analyzeStatus').textContent = '⚠️ Fehler: ' + (err.message || JSON.stringify(err));
     document.getElementById('dataGrid').style.display = 'grid';
     buildKategorieCards([]);
     document.getElementById('btn1').disabled = false;
