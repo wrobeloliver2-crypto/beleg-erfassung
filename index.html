@@ -352,12 +352,12 @@ function detectReceiptBounds(img) {
 
   const pw = right - left, ph = bottom - top;
   if (pw > cw*0.15 && ph > ch*0.15 && pw < cw*0.98 && ph < ch*0.98) {
-    const pad = 8;
+    const padX = 10, padTop = 20, padBottom = 10;
     return {
-      x: Math.max(0, (left-pad)/cw),
-      y: Math.max(0, (top-pad)/ch),
-      w: Math.min(1-(left-pad)/cw, (pw+pad*2)/cw),
-      h: Math.min(1-(top-pad)/ch, (ph+pad*2)/ch)
+      x: Math.max(0, (left-padX)/cw),
+      y: Math.max(0, (top-padTop)/ch),
+      w: Math.min(1, (pw+padX*2)/cw),
+      h: Math.min(1, (ph+padTop+padBottom)/ch)
     };
   }
   // Fallback
