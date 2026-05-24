@@ -609,8 +609,17 @@ Gib genau 3 passende SKR-03-Kategorievorschläge. Nicht erkennbare Felder: "nich
     state.betrag = parsed.betrag||'';
     state.mwst = parsed.mwst||'';
     // Auto-set payment if recognized on receipt
-    if (parsed.zahlungsart && parsed.zahlungsart !== 'unbekannt' && parsed.zahlungsart !== 'nicht erkannt') {
-      state.payment = parsed.zahlungsart;
+    let detectedPayment = parsed.zahlungsart || 'unbekannt';
+    // Fuzzy fallback: scan haendler/raw text for known keywords
+    const rawText = JSON.stringify(parsed).toLowerCase();
+    if (detectedPayment === 'unbekannt' || detectedPayment === 'nicht erkannt') {
+      if (/mastercard|visa|kredit/.test(rawText)) detectedPayment = 'mc';
+      else if (/american express|amex/.test(rawText)) detectedPayment = 'amex';
+      else if (/ec[- ]|giro|maestro|debit|girokarte/.test(rawText)) detectedPayment = 'giro';
+      else if (/bar|cash|barzahlung/.test(rawText)) detectedPayment = 'bar';
+    }
+    if (detectedPayment && detectedPayment !== 'unbekannt' && detectedPayment !== 'nicht erkannt') {
+      state.payment = detectedPayment;
       state.paymentAutoDetected = true;
     } else {
       state.paymentAutoDetected = false;
