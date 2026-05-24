@@ -312,54 +312,55 @@ function compressImage(dataUrl, maxW, maxH, quality) {
 // ── Auto Crop Detection ──
 // Finds bounding box of the receipt (bright area on dark background)
 function detectReceiptBounds(img) {
-  const cw = 300, ch = Math.round(300 * img.height / img.width);
+  const cw = 200, ch = Math.round(200 * img.height / img.width);
   const c = document.createElement('canvas'); c.width=cw; c.height=ch;
   const ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0, cw, ch);
   const data = ctx.getImageData(0, 0, cw, ch).data;
 
-  // Build grayscale map
-  const gray = new Uint8Array(cw * ch);
+  // Build grayscale
+  const gray = new Float32Array(cw * ch);
+  let sum = 0;
   for (let i = 0; i < cw * ch; i++) {
-    gray[i] = (data[i*4]*0.299 + data[i*4+1]*0.587 + data[i*4+2]*0.114);
+    gray[i] = data[i*4]*0.299 + data[i*4+1]*0.587 + data[i*4+2]*0.114;
+    sum += gray[i];
+  }
+  const mean = sum / (cw * ch);
+  let variance = 0;
+  for (let i = 0; i < cw * ch; i++) variance += (gray[i]-mean)**2;
+  const std = Math.sqrt(variance / (cw * ch));
+  const threshold = mean + std * 0.3;
+
+  // Row and column brightness profiles
+  const rowAvg = new Float32Array(ch);
+  const colAvg = new Float32Array(cw);
+  for (let y = 0; y < ch; y++) {
+    let s = 0;
+    for (let x = 0; x < cw; x++) s += gray[y*cw+x];
+    rowAvg[y] = s / cw;
+  }
+  for (let x = 0; x < cw; x++) {
+    let s = 0;
+    for (let y = 0; y < ch; y++) s += gray[y*cw+x];
+    colAvg[x] = s / ch;
   }
 
-  // Compute horizontal & vertical gradient (Sobel-lite)
-  const edge = new Uint8Array(cw * ch);
-  for (let y = 1; y < ch-1; y++) {
-    for (let x = 1; x < cw-1; x++) {
-      const gx = -gray[(y-1)*cw+(x-1)] + gray[(y-1)*cw+(x+1)]
-                 -2*gray[y*cw+(x-1)]   + 2*gray[y*cw+(x+1)]
-                 -gray[(y+1)*cw+(x-1)] + gray[(y+1)*cw+(x+1)];
-      const gy = -gray[(y-1)*cw+(x-1)] - 2*gray[(y-1)*cw+x] - gray[(y-1)*cw+(x+1)]
-                 +gray[(y+1)*cw+(x-1)] + 2*gray[(y+1)*cw+x] + gray[(y+1)*cw+(x+1)];
-      edge[y*cw+x] = Math.min(255, Math.sqrt(gx*gx + gy*gy));
-    }
-  }
-
-  // Find bounding box of strong edges
-  const threshold = 30;
+  // Find contiguous bright region
   let top=ch, bottom=0, left=cw, right=0;
-  for (let y=0; y<ch; y++) for (let x=0; x<cw; x++) {
-    if (edge[y*cw+x] > threshold) {
-      if (y<top) top=y; if (y>bottom) bottom=y;
-      if (x<left) left=x; if (x>right) right=x;
-    }
-  }
+  for (let y = 0; y < ch; y++) if (rowAvg[y] > threshold) { if(y<top) top=y; if(y>bottom) bottom=y; }
+  for (let x = 0; x < cw; x++) if (colAvg[x] > threshold) { if(x<left) left=x; if(x>right) right=x; }
 
   const pw = right - left, ph = bottom - top;
-  // If detection looks reasonable (covers at least 20% of image)
-  if (pw > cw*0.2 && ph > ch*0.2) {
-    const pad = 10;
+  if (pw > cw*0.15 && ph > ch*0.15 && pw < cw*0.98 && ph < ch*0.98) {
+    const pad = 8;
     return {
       x: Math.max(0, (left-pad)/cw),
       y: Math.max(0, (top-pad)/ch),
-      w: Math.min(1, (pw+pad*2)/cw),
-      h: Math.min(1, (ph+pad*2)/ch)
+      w: Math.min(1-(left-pad)/cw, (pw+pad*2)/cw),
+      h: Math.min(1-(top-pad)/ch, (ph+pad*2)/ch)
     };
   }
-
-  // Fallback: center crop with slight inset (works well for receipts on any background)
+  // Fallback
   return { x: 0.05, y: 0.05, w: 0.90, h: 0.90 };
 }
 
