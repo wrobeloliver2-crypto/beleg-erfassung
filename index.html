@@ -239,7 +239,7 @@
     <div class="summary-rows" id="summaryRows"></div>
   </div>
   <button class="btn btn-secondary" onclick="previewPDF()"><span>👁️</span> PDF Vorschau</button>
-  <button class="btn btn-share" onclick="generateAndShare()"><span>📤</span> PDF erstellen & teilen</button>
+  <button class="btn btn-share" id="btnSend" onclick="generateAndSend()"><span>📧</span> Beleg jetzt senden</button>
   <button class="btn btn-secondary" onclick="goTo(4)">← Zurück</button>
   <button class="reset-btn" onclick="resetApp()">Neuen Beleg erfassen</button>
 </div>
@@ -726,24 +726,64 @@ async function buildPDFBlob() {
   return doc.output('blob');
 }
 
-async function generateAndShare() {
-  showToast('📄 PDF wird erstellt…');
+async function generateAndSend() {
+  const btn = document.getElementById('btnSend');
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span> Wird gesendet…';
   try {
     const pdfBlob = await buildPDFBlob();
-    const haendlerClean=(state.haendler||'beleg').replace(/[^a-zA-Z0-9äöüÄÖÜ]/g,'_').toLowerCase();
-    const filename=`beleg_${haendlerClean}_${(state.datum||'').replace(/\./g,'-')}.pdf`;
-    const pdfFile=new File([pdfBlob],filename,{type:'application/pdf'});
-    if (navigator.share && navigator.canShare && navigator.canShare({files:[pdfFile]})) {
-      await navigator.share({ title:`Beleg: ${state.haendler||''} · ${state.datum||''}`, text:`${state.kategorieLabel||''} · ${PM_LABELS[state.payment]||''} · ${state.firmaLabel||''}`, files:[pdfFile] });
-      showToast('✅ PDF geteilt!');
+    const haendlerClean = (state.haendler||'beleg').replace(/[^a-zA-Z0-9äöüÄÖÜ]/g,'_').toLowerCase();
+    const filename = `beleg_${haendlerClean}_${(state.datum||'').replace(/\./g,'-')}.pdf`;
+
+    // Convert blob to base64
+    const pdfBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(pdfBlob);
+    });
+
+    const emailBody = `
+      <p>Neuer Beleg eingegangen:</p>
+      <table style="font-family:sans-serif;font-size:14px;border-collapse:collapse">
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Händler</td><td><strong>${state.haendler||'–'}</strong></td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Datum</td><td>${state.datum||'–'}</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Betrag</td><td>${state.betrag||'–'}</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">MwSt.</td><td>${state.mwst||'–'}</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Kategorie</td><td>${state.kategorieLabel||'–'} (SKR03: ${state.kategorie||'–'})</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Zahlungsmittel</td><td>${PM_LABELS[state.payment]||state.payment||'–'}</td></tr>
+        ${state.notiz ? `<tr><td style="color:#888;padding:4px 16px 4px 0">Notiz</td><td>${state.notiz}</td></tr>` : ''}
+      </table>
+      <p style="color:#888;font-size:12px;margin-top:24px">Gesendet via Beleg-App · ${new Date().toLocaleDateString('de-DE')}</p>
+    `;
+
+    const response = await fetch('/.netlify/functions/send-beleg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: state.firmaEmail,
+        subject: `Beleg: ${state.haendler||'–'} · ${state.datum||'–'} · ${state.betrag||'–'}`,
+        body: emailBody,
+        pdfBase64,
+        filename
+      })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      btn.innerHTML = '<span>✅</span> Gesendet!';
+      showToast('✅ Beleg gesendet an ' + state.firmaEmail);
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<span>📧</span> Beleg jetzt senden';
+      }, 3000);
     } else {
-      const url=URL.createObjectURL(pdfBlob);
-      const a=document.createElement('a'); a.href=url; a.download=filename; a.click();
-      URL.revokeObjectURL(url);
-      showToast('✅ PDF heruntergeladen');
+      throw new Error(JSON.stringify(result.error));
     }
   } catch(err) {
-    if (err.name!=='AbortError') showToast('⚠️ Fehler: '+err.message);
+    showToast('⚠️ Fehler: ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = '<span>📧</span> Beleg jetzt senden';
   }
 }
 
