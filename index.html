@@ -254,8 +254,8 @@
     <canvas id="cropCanvas"></canvas>
   </div>
   <div class="crop-footer">
-    <button class="crop-btn crop-btn-cancel" onclick="cancelCrop()">Überspringen</button>
-    <button class="crop-btn crop-btn-confirm" onclick="confirmCrop()">✓ Zuschneiden</button>
+    <button class="crop-btn crop-btn-cancel" onclick="cancelCrop()">Neu aufnehmen</button>
+    <button class="crop-btn crop-btn-confirm" onclick="confirmCrop()">✓ Übernehmen</button>
   </div>
 </div>
 
@@ -571,7 +571,8 @@ Gib genau 3 passende SKR-03-Kategorievorschläge. Nicht erkennbare Felder: "nich
     });
 
     const data = await response.json();
-    const raw = data.content.map(b=>b.text||'').join('');
+    if (!data.content) throw new Error("API-Fehler: " + JSON.stringify(data));
+    const raw = data.content.map(b=>b.text||"").join("");
     const clean = raw.replace(/```json|```/g,'').trim();
     const parsed = JSON.parse(clean);
 
