@@ -312,46 +312,55 @@ function compressImage(dataUrl, maxW, maxH, quality) {
 // ── Auto Crop Detection ──
 // Finds bounding box of the receipt (bright area on dark background)
 function detectReceiptBounds(img) {
-  const cw = 200, ch = Math.round(200 * img.height / img.width);
+  const cw = 300, ch = Math.round(300 * img.height / img.width);
   const c = document.createElement('canvas'); c.width=cw; c.height=ch;
   const ctx = c.getContext('2d');
-  ctx.drawImage(img,0,0,cw,ch);
-  const data = ctx.getImageData(0,0,cw,ch).data;
+  ctx.drawImage(img, 0, 0, cw, ch);
+  const data = ctx.getImageData(0, 0, cw, ch).data;
 
-  // Build brightness map
-  const bright = [];
-  for (let y=0;y<ch;y++) {
-    bright[y]=[];
-    for (let x=0;x<cw;x++) {
-      const i=(y*cw+x)*4;
-      bright[y][x]=(data[i]+data[i+1]+data[i+2])/3;
+  // Build grayscale map
+  const gray = new Uint8Array(cw * ch);
+  for (let i = 0; i < cw * ch; i++) {
+    gray[i] = (data[i*4]*0.299 + data[i*4+1]*0.587 + data[i*4+2]*0.114);
+  }
+
+  // Compute horizontal & vertical gradient (Sobel-lite)
+  const edge = new Uint8Array(cw * ch);
+  for (let y = 1; y < ch-1; y++) {
+    for (let x = 1; x < cw-1; x++) {
+      const gx = -gray[(y-1)*cw+(x-1)] + gray[(y-1)*cw+(x+1)]
+                 -2*gray[y*cw+(x-1)]   + 2*gray[y*cw+(x+1)]
+                 -gray[(y+1)*cw+(x-1)] + gray[(y+1)*cw+(x+1)];
+      const gy = -gray[(y-1)*cw+(x-1)] - 2*gray[(y-1)*cw+x] - gray[(y-1)*cw+(x+1)]
+                 +gray[(y+1)*cw+(x-1)] + 2*gray[(y+1)*cw+x] + gray[(y+1)*cw+(x+1)];
+      edge[y*cw+x] = Math.min(255, Math.sqrt(gx*gx + gy*gy));
     }
   }
 
-  // Find edges: first/last row/col where brightness > threshold
-  const threshold = 140;
-  let top=ch,bottom=0,left=cw,right=0;
-  for (let y=0;y<ch;y++) for (let x=0;x<cw;x++) {
-    if (bright[y][x]>threshold) {
+  // Find bounding box of strong edges
+  const threshold = 30;
+  let top=ch, bottom=0, left=cw, right=0;
+  for (let y=0; y<ch; y++) for (let x=0; x<cw; x++) {
+    if (edge[y*cw+x] > threshold) {
       if (y<top) top=y; if (y>bottom) bottom=y;
       if (x<left) left=x; if (x>right) right=x;
     }
   }
 
-  // Add padding, clamp
-  const pad = 8;
-  top = Math.max(0, top-pad); bottom = Math.min(ch, bottom+pad);
-  left = Math.max(0, left-pad); right = Math.min(cw, right+pad);
-
-  // If detection fails (whole image bright), use full image with small inset
-  if (right-left < cw*0.3 || bottom-top < ch*0.3) {
-    return { x:0.02, y:0.02, w:0.96, h:0.96 };
+  const pw = right - left, ph = bottom - top;
+  // If detection looks reasonable (covers at least 20% of image)
+  if (pw > cw*0.2 && ph > ch*0.2) {
+    const pad = 10;
+    return {
+      x: Math.max(0, (left-pad)/cw),
+      y: Math.max(0, (top-pad)/ch),
+      w: Math.min(1, (pw+pad*2)/cw),
+      h: Math.min(1, (ph+pad*2)/ch)
+    };
   }
 
-  return {
-    x: left/cw, y: top/ch,
-    w: (right-left)/cw, h: (bottom-top)/ch
-  };
+  // Fallback: center crop with slight inset (works well for receipts on any background)
+  return { x: 0.05, y: 0.05, w: 0.90, h: 0.90 };
 }
 
 // ── Crop UI ──
@@ -385,13 +394,13 @@ function showCropOverlay(imageDataUrl) {
     cropState.dw = dw;
     cropState.dh = dh;
 
-    // Auto-detect bounds
+    // Auto-detect bounds using edge detection
     const bounds = detectReceiptBounds(img);
     cropState.rect = {
-      x: ox + bounds.x * dw,
-      y: oy + bounds.y * dh,
-      w: bounds.w * dw,
-      h: bounds.h * dh
+      x: ox + Math.round(bounds.x * dw),
+      y: oy + Math.round(bounds.y * dh),
+      w: Math.round(bounds.w * dw),
+      h: Math.round(bounds.h * dh)
     };
 
     drawCrop();
