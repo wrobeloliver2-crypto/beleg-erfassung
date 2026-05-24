@@ -591,8 +591,8 @@ async function analyzeBeleg() {
           content: [
             { type:'image', source:{ type:'base64', media_type:'image/jpeg', data:base64 } },
             { type:'text', text:`Analysiere diesen Kassenbon/Beleg. Antworte NUR mit einem JSON-Objekt, ohne Markdown, ohne Backticks:
-{"haendler":"Name des Händlers","datum":"TT.MM.JJJJ","betrag":"Bruttobetrag z.B. 24,90 €","mwst":"MwSt z.B. 19% / 3,97 €","kategorien":[{"label":"SKR03 Kategoriename","konto":"Kontonummer","grund":"1 Satz warum"},{"label":"SKR03 Kategoriename","konto":"Kontonummer","grund":"1 Satz warum"},{"label":"SKR03 Kategoriename","konto":"Kontonummer","grund":"1 Satz warum"}]}
-Gib genau 3 passende SKR-03-Kategorievorschläge. Nicht erkennbare Felder: "nicht erkannt".` }
+{"haendler":"Name des Händlers","datum":"TT.MM.JJJJ","betrag":"Bruttobetrag z.B. 24,90 €","mwst":"MwSt z.B. 19% / 3,97 €","zahlungsart":"mc oder amex oder giro oder bar oder ueberweisung oder unbekannt","kategorien":[{"label":"SKR03 Kategoriename","konto":"Kontonummer","grund":"1 Satz warum"},{"label":"SKR03 Kategoriename","konto":"Kontonummer","grund":"1 Satz warum"},{"label":"SKR03 Kategoriename","konto":"Kontonummer","grund":"1 Satz warum"}]}
+Zahlungsart-Regeln: Mastercard/DEBIT MASTERCARD → mc. Visa → mc. American Express → amex. EC/Girocard/Maestro → giro. Nur Bargeld → bar. Überweisung → ueberweisung. Sonst → unbekannt. Gib genau 3 passende SKR-03-Kategorievorschläge. Nicht erkennbare Felder: "nicht erkannt".` }
           ]
         }]
       })
@@ -610,14 +610,6 @@ Gib genau 3 passende SKR-03-Kategorievorschläge. Nicht erkennbare Felder: "nich
     state.mwst = parsed.mwst||'';
     // Auto-set payment if recognized on receipt
     let detectedPayment = parsed.zahlungsart || 'unbekannt';
-    // Fuzzy fallback: scan haendler/raw text for known keywords
-    const rawText = JSON.stringify(parsed).toLowerCase();
-    if (detectedPayment === 'unbekannt' || detectedPayment === 'nicht erkannt') {
-      if (/mastercard|visa|kredit/.test(rawText)) detectedPayment = 'mc';
-      else if (/american express|amex/.test(rawText)) detectedPayment = 'amex';
-      else if (/ec[- ]|giro|maestro|debit|girokarte/.test(rawText)) detectedPayment = 'giro';
-      else if (/bar|cash|barzahlung/.test(rawText)) detectedPayment = 'bar';
-    }
     if (detectedPayment && detectedPayment !== 'unbekannt' && detectedPayment !== 'nicht erkannt') {
       state.payment = detectedPayment;
       state.paymentAutoDetected = true;
