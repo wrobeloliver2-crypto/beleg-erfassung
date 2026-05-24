@@ -1,21 +1,18 @@
 const https = require('https');
 
-function httpsPost(url, headers, bodyData) {
+function httpsPost(hostname, path, headers, bodyData) {
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
     const bodyStr = JSON.stringify(bodyData);
     const options = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname,
-      method: 'POST',
+      hostname, path, method: 'POST',
       headers: { ...headers, 'Content-Length': Buffer.byteLength(bodyStr) }
     };
     const req = https.request(options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error('JSON parse error: ' + data)); }
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch(e) { resolve({ status: res.statusCode, body: data }); }
       });
     });
     req.on('error', reject);
@@ -31,12 +28,18 @@ exports.handler = async function(event) {
 
   try {
     const body = JSON.parse(event.body);
+    const apiKey = process.env.ANTHROPIC_API_KEY;
 
-    const data = await httpsPost(
-      'https://api.anthropic.com/v1/messages',
+    if (!apiKey) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'ANTHROPIC_API_KEY not set' }) };
+    }
+
+    const result = await httpsPost(
+      'api.anthropic.com',
+      '/v1/messages',
       {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
       {
@@ -47,14 +50,15 @@ exports.handler = async function(event) {
     );
 
     return {
-      statusCode: 200,
+      statusCode: result.status,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(result.body)
     };
+
   } catch (err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message })
+      body: JSON.stringify({ error: err.message, stack: err.stack })
     };
   }
 };
