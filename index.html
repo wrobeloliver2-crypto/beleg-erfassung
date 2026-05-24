@@ -197,7 +197,7 @@
   <div class="screen-title">Kategorie wählen</div>
   <div class="screen-sub">Wähle die passende SKR-03-Buchungskategorie.</div>
   <div class="choice-grid" id="kategorieListe"></div>
-  <button class="btn btn-primary" id="btn2" onclick="goTo(3)" disabled>Weiter →</button>
+  <button class="btn btn-primary" id="btn2" onclick="goToAfterKategorie()" disabled>Weiter →</button>
   <button class="btn btn-secondary" onclick="goTo(1)">← Zurück</button>
 </div>
 
@@ -287,6 +287,16 @@ function goTo(n) {
   updateStepUI();
   if (n===5) buildSummary();
 }
+function goToAfterKategorie() {
+  if (state.paymentAutoDetected) {
+    // Show brief toast and skip payment screen
+    showToast('💳 ' + PM_LABELS[state.payment] + ' erkannt');
+    goTo(4);
+  } else {
+    goTo(3);
+  }
+}
+
 function updateStepUI() {
   document.getElementById('stepLabel').textContent = `Schritt ${currentStep} von 5`;
   for (let i=1;i<=5;i++) {
@@ -598,6 +608,13 @@ Gib genau 3 passende SKR-03-Kategorievorschläge. Nicht erkennbare Felder: "nich
     state.datum = parsed.datum||'';
     state.betrag = parsed.betrag||'';
     state.mwst = parsed.mwst||'';
+    // Auto-set payment if recognized on receipt
+    if (parsed.zahlungsart && parsed.zahlungsart !== 'unbekannt' && parsed.zahlungsart !== 'nicht erkannt') {
+      state.payment = parsed.zahlungsart;
+      state.paymentAutoDetected = true;
+    } else {
+      state.paymentAutoDetected = false;
+    }
 
     document.getElementById('fieldHaendler').value = state.haendler;
     document.getElementById('fieldDatum').value = state.datum;
