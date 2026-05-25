@@ -204,7 +204,7 @@
 <!-- SCREEN 3: Zahlungsmittel -->
 <div class="screen" id="screen3">
   <div class="screen-title">Zahlungsmittel</div>
-  <div class="screen-sub">Womit wurde dieser Beleg bezahlt?</div>
+  <div class="screen-sub" id="paymentSub">Womit wurde dieser Beleg bezahlt?</div>
   <div class="payment-grid">
     <div class="payment-card" id="pm-amex" onclick="selectPayment('amex')"><span class="pm-icon">💳</span><span class="pm-name">American Express</span></div>
     <div class="payment-card" id="pm-giro" onclick="selectPayment('giro')"><span class="pm-icon">🏦</span><span class="pm-name">EC / Giro</span></div>
@@ -288,13 +288,15 @@ function goTo(n) {
   if (n===5) buildSummary();
 }
 function goToAfterKategorie() {
+  // Always show step 3, but pre-select if auto-detected
   if (state.paymentAutoDetected) {
-    // Show brief toast and skip payment screen
-    showToast('💳 ' + PM_LABELS[state.payment] + ' erkannt');
-    goTo(4);
+    // Pre-select the detected payment
+    selectPayment(state.payment);
+    document.getElementById('paymentSub').textContent = '💳 ' + PM_LABELS[state.payment] + ' erkannt — bestätigen oder ändern.';
   } else {
-    goTo(3);
+    document.getElementById('paymentSub').textContent = 'Womit wurde dieser Beleg bezahlt?';
   }
+  goTo(3);
 }
 
 function updateStepUI() {
