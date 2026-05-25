@@ -213,6 +213,21 @@
     <div class="payment-card" id="pm-ueberweisung" onclick="selectPayment('ueberweisung')"><span class="pm-icon">📱</span><span class="pm-name">Überweisung</span></div>
     <div class="payment-card" id="pm-sonstige" onclick="selectPayment('sonstige')"><span class="pm-icon">❓</span><span class="pm-name">Sonstige</span></div>
   </div>
+  <div class="mt">
+    <div class="section-label">Bezahlt über</div>
+    <div class="firma-grid">
+      <div class="firma-card" id="pay-firma" onclick="selectBezahltVia('firma')">
+        <span class="f-icon">🏢</span>
+        <span class="f-name">Firmenkonto</span>
+        <span class="f-mail">normale Buchung</span>
+      </div>
+      <div class="firma-card" id="pay-privat" onclick="selectBezahltVia('privat')">
+        <span class="f-icon">👤</span>
+        <span class="f-name">Privat vorgestreckt</span>
+        <span class="f-mail">SKR03: 1700</span>
+      </div>
+    </div>
+  </div>
   <div class="mt"><div class="section-label">Optionale Notiz</div><textarea class="notiz-input" id="notizInput" placeholder="z.B. Mitarbeiter-Namen, Anlass, Projekt…" rows="3"></textarea></div>
   <button class="btn btn-primary" id="btn3" onclick="goTo(4)" disabled>Weiter →</button>
   <button class="btn btn-secondary" onclick="goTo(2)">← Zurück</button>
@@ -269,7 +284,7 @@ const state = {
   imageFile: null, imageDataUrl: null, imageDataUrlSmall: null,
   haendler:'', datum:'', betrag:'', mwst:'',
   kategorie:null, kategorieLabel:null,
-  payment:null, firma:null, firmaLabel:null, firmaEmail:null, notiz:''
+  payment:null, bezahltVia:'firma', firma:null, firmaLabel:null, firmaEmail:null, notiz:''
 };
 
 const FIRMA_DATA = {
@@ -298,6 +313,9 @@ function goToAfterKategorie() {
   }
   goTo(3);
 }
+
+// Init default bezahltVia
+setTimeout(() => selectBezahltVia('firma'), 100);
 
 function updateStepUI() {
   document.getElementById('stepLabel').textContent = `Schritt ${currentStep} von 5`;
@@ -664,6 +682,8 @@ function buildKategorieCards(kategorien) {
 // ── Payment ──
 function selectPayment(pm) {
   document.querySelectorAll('.payment-card').forEach(c=>c.className='payment-card');
+  document.querySelectorAll('#pay-firma, #pay-privat').forEach(c=>c.className='firma-card');
+  selectBezahltVia('firma');
   const map={amex:'sel-amex',giro:'sel-giro',mc:'sel-mc',bar:'sel-mc',ueberweisung:'sel-giro',sonstige:'sel-giro'};
   document.getElementById('pm-'+pm).classList.add(map[pm]||'sel-giro');
   state.payment = pm;
@@ -671,6 +691,12 @@ function selectPayment(pm) {
 }
 
 // ── Firma ──
+function selectBezahltVia(via) {
+  document.querySelectorAll('#pay-firma, #pay-privat').forEach(c => c.className = 'firma-card');
+  document.getElementById('pay-' + via).classList.add(via === 'firma' ? 'sel-pilates' : 'sel-physio');
+  state.bezahltVia = via;
+}
+
 function selectFirma(f) {
   document.querySelectorAll('.firma-card').forEach(c=>c.className='firma-card');
   document.getElementById('f-'+f).classList.add(f==='pilates'?'sel-pilates':'sel-physio');
@@ -688,6 +714,7 @@ function buildSummary() {
     ['Kategorie', `${state.kategorieLabel} (${state.kategorie})`],
     ['Zahlungsmittel', PM_LABELS[state.payment]||state.payment],
     ['Firma', `<span class="badge badge-${state.firma}">${state.firmaLabel}</span>`],
+    ['Bezahlt über', state.bezahltVia === 'privat' ? '👤 Privat vorgestreckt — Verbindlichkeit ggü. Gesellschafter (SKR03: 1700)' : '🏢 Firmenkonto'],
     ...(state.notiz ? [['Notiz', state.notiz]] : [])
   ];
   document.getElementById('summaryRows').innerHTML = rows.map(([l,v])=>`<div class="summary-row"><span class="sr-label">${l}</span><span class="sr-value">${v}</span></div>`).join('');
@@ -772,6 +799,7 @@ async function generateAndSend() {
         <tr><td style="color:#888;padding:4px 16px 4px 0">MwSt.</td><td>${state.mwst||'–'}</td></tr>
         <tr><td style="color:#888;padding:4px 16px 4px 0">Kategorie</td><td>${state.kategorieLabel||'–'} (SKR03: ${state.kategorie||'–'})</td></tr>
         <tr><td style="color:#888;padding:4px 16px 4px 0">Zahlungsmittel</td><td>${PM_LABELS[state.payment]||state.payment||'–'}</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Bezahlt über</td><td>${state.bezahltVia === 'privat' ? '<strong style=\"color:#c0392b\">Privat vorgestreckt → bitte als Verbindlichkeit ggü. Gesellschafter buchen (SKR03: 1700)</strong>' : 'Firmenkonto'}</td></tr>
         ${state.notiz ? `<tr><td style="color:#888;padding:4px 16px 4px 0">Notiz</td><td>${state.notiz}</td></tr>` : ''}
       </table>
       <p style="color:#888;font-size:12px;margin-top:24px">Gesendet via Beleg-App · ${new Date().toLocaleDateString('de-DE')}</p>
@@ -820,6 +848,8 @@ function resetApp() {
   ['btn1','btn2','btn3','btn4'].forEach(b=>document.getElementById(b).disabled=true);
   document.getElementById('notizInput').value='';
   document.querySelectorAll('.payment-card').forEach(c=>c.className='payment-card');
+  document.querySelectorAll('#pay-firma, #pay-privat').forEach(c=>c.className='firma-card');
+  selectBezahltVia('firma');
   document.querySelectorAll('.firma-card').forEach(c=>c.className='firma-card');
   goTo(1);
 }
