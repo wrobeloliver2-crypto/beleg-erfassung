@@ -201,6 +201,24 @@
   <button class="btn btn-secondary" onclick="goTo(1)">← Zurück</button>
 </div>
 
+<!-- SCREEN 2b: Bewirtung -->
+<div class="screen" id="screen2b">
+  <div class="screen-title">Bewirtungsnachweis</div>
+  <div class="screen-sub">Diese Angaben sind steuerlich erforderlich (§ 4 Abs. 5 EStG). Du kannst diesen Schritt überspringen.</div>
+
+  <div class="section-label">Anlass der Bewirtung</div>
+  <input type="text" class="notiz-input" id="bewAnlass" placeholder="z.B. Kundengespräch, Teambesprechung…" style="min-height:auto;padding:14px 16px">
+
+  <div class="section-label mt">Teilnehmer (Namen + Firma)</div>
+  <textarea class="notiz-input" id="bewTeilnehmer" placeholder="z.B. Max Mustermann (Musterfirma GmbH), Anna Schmidt (Kunde)" rows="3"></textarea>
+
+  <div class="section-label mt">Geschäftlicher Grund</div>
+  <textarea class="notiz-input" id="bewGrund" placeholder="z.B. Akquisegespräch Neukunde, Jahresgespräch Lieferant…" rows="3"></textarea>
+
+  <button class="btn btn-primary" onclick="confirmBewirtung()">Weiter →</button>
+  <button class="btn btn-secondary" onclick="skipBewirtung()">Überspringen</button>
+</div>
+
 <!-- SCREEN 3: Zahlungsmittel -->
 <div class="screen" id="screen3">
   <div class="screen-title">Zahlungsmittel</div>
@@ -284,7 +302,7 @@ const state = {
   imageFile: null, imageDataUrl: null, imageDataUrlSmall: null,
   haendler:'', datum:'', betrag:'', mwst:'',
   kategorie:null, kategorieLabel:null,
-  payment:null, bezahltVia:'firma', firma:null, firmaLabel:null, firmaEmail:null, notiz:''
+  payment:null, bezahltVia:'firma', firma:null, firmaLabel:null, firmaEmail:null, notiz:'', isBewirtung:false, bewAnlass:'', bewTeilnehmer:'', bewGrund:''
 };
 
 const FIRMA_DATA = {
@@ -296,22 +314,49 @@ const PM_LABELS = { amex:'American Express', giro:'EC / Girokarte', mc:'Masterca
 // ── Navigation ──
 let currentStep = 1;
 function goTo(n) {
-  document.getElementById('screen'+currentStep).classList.remove('active');
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   currentStep = n;
   document.getElementById('screen'+n).classList.add('active');
   updateStepUI();
   if (n===5) buildSummary();
 }
 function goToAfterKategorie() {
-  // Always show step 3, but pre-select if auto-detected
+  // Check if Bewirtung category selected
+  const label = (state.kategorieLabel || '').toLowerCase();
+  const isBew = /bewirt|geschäftsessen|mahlzeit|restaurant|verpfleg/.test(label);
+  if (isBew) {
+    goToScreen('screen2b');
+  } else {
+    goToPayment();
+  }
+}
+
+function confirmBewirtung() {
+  state.isBewirtung = true;
+  state.bewAnlass = document.getElementById('bewAnlass').value;
+  state.bewTeilnehmer = document.getElementById('bewTeilnehmer').value;
+  state.bewGrund = document.getElementById('bewGrund').value;
+  goToPayment();
+}
+
+function skipBewirtung() {
+  state.isBewirtung = false;
+  goToPayment();
+}
+
+function goToPayment() {
   if (state.paymentAutoDetected) {
-    // Pre-select the detected payment
     selectPayment(state.payment);
     document.getElementById('paymentSub').textContent = '💳 ' + PM_LABELS[state.payment] + ' erkannt — bestätigen oder ändern.';
   } else {
     document.getElementById('paymentSub').textContent = 'Womit wurde dieser Beleg bezahlt?';
   }
-  goTo(3);
+  goToScreen('screen3');
+}
+
+function goToScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
 // Init default bezahltVia
@@ -715,7 +760,12 @@ function buildSummary() {
     ['Zahlungsmittel', PM_LABELS[state.payment]||state.payment],
     ['Firma', `<span class="badge badge-${state.firma}">${state.firmaLabel}</span>`],
     ['Bezahlt über', state.bezahltVia === 'privat' ? '👤 Privat vorgestreckt — Verbindlichkeit ggü. Gesellschafter (SKR03: 1700)' : '🏢 Firmenkonto'],
-    ...(state.notiz ? [['Notiz', state.notiz]] : [])
+    ...(state.notiz ? [['Notiz', state.notiz]] : []),
+    ...(state.isBewirtung ? [
+      ['Bewirtung: Anlass', state.bewAnlass||'–'],
+      ['Bewirtung: Teilnehmer', state.bewTeilnehmer||'–'],
+      ['Bewirtung: Grund', state.bewGrund||'–']
+    ] : [])
   ];
   document.getElementById('summaryRows').innerHTML = rows.map(([l,v])=>`<div class="summary-row"><span class="sr-label">${l}</span><span class="sr-value">${v}</span></div>`).join('');
 }
@@ -801,6 +851,12 @@ async function generateAndSend() {
         <tr><td style="color:#888;padding:4px 16px 4px 0">Zahlungsmittel</td><td>${PM_LABELS[state.payment]||state.payment||'–'}</td></tr>
         <tr><td style="color:#888;padding:4px 16px 4px 0">Bezahlt über</td><td>${state.bezahltVia === 'privat' ? '<strong style=\"color:#c0392b\">Privat vorgestreckt → bitte als Verbindlichkeit ggü. Gesellschafter buchen (SKR03: 1700)</strong>' : 'Firmenkonto'}</td></tr>
         ${state.notiz ? `<tr><td style="color:#888;padding:4px 16px 4px 0">Notiz</td><td>${state.notiz}</td></tr>` : ''}
+        ${state.isBewirtung ? `
+        <tr><td colspan="2" style="padding:8px 0 4px;font-weight:bold;color:#555">Bewirtungsnachweis (§4 Abs.5 EStG)</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Anlass</td><td>${state.bewAnlass||'–'}</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Teilnehmer</td><td>${state.bewTeilnehmer||'–'}</td></tr>
+        <tr><td style="color:#888;padding:4px 16px 4px 0">Grund</td><td>${state.bewGrund||'–'}</td></tr>
+        ` : ''}
       </table>
       <p style="color:#888;font-size:12px;margin-top:24px">Gesendet via Beleg-App · ${new Date().toLocaleDateString('de-DE')}</p>
     `;
@@ -837,7 +893,7 @@ async function generateAndSend() {
 
 // ── Reset ──
 function resetApp() {
-  Object.assign(state,{imageFile:null,imageDataUrl:null,imageDataUrlSmall:null,_rawDataUrl:null,haendler:'',datum:'',betrag:'',mwst:'',kategorie:null,kategorieLabel:null,payment:null,firma:null,firmaLabel:null,firmaEmail:null,notiz:''});
+  Object.assign(state,{imageFile:null,imageDataUrl:null,imageDataUrlSmall:null,_rawDataUrl:null,haendler:'',datum:'',betrag:'',mwst:'',kategorie:null,kategorieLabel:null,payment:null,bezahltVia:'firma',firma:null,firmaLabel:null,firmaEmail:null,notiz:'',isBewirtung:false,bewAnlass:'',bewTeilnehmer:'',bewGrund:''});
   const area=document.getElementById('photoArea');
   area.className='photo-area';
   area.innerHTML='<span class="photo-icon">📷</span><span class="photo-hint">Tippen um Foto aufzunehmen</span>';
