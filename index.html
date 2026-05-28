@@ -271,9 +271,9 @@
     <img class="summary-photo" id="summaryPhoto" src="" alt="Beleg">
     <div class="summary-rows" id="summaryRows"></div>
   </div>
-  <button class="btn btn-secondary" onclick="previewPDF()"><span>👁️</span> PDF Vorschau</button>
+  <button class="btn btn-secondary" id="btnPreview5" onclick="previewPDF()"><span>👁️</span> PDF Vorschau</button>
   <button class="btn btn-share" id="btnSend" onclick="generateAndSend()"><span>📧</span> Beleg jetzt senden</button>
-  <button class="btn btn-secondary" onclick="goTo(4)">← Zurück</button>
+  <button class="btn btn-secondary" id="btnBack5" onclick="goTo(4)">← Zurück</button>
   <button class="reset-btn" onclick="resetApp()">Neuen Beleg erfassen</button>
 </div>
 
@@ -877,10 +877,9 @@ async function generateAndSend() {
     if (result.success) {
       btn.innerHTML = '<span>✅</span> Gesendet!';
       showToast('✅ Beleg gesendet an ' + state.firmaEmail);
-      setTimeout(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<span>📧</span> Beleg jetzt senden';
-      }, 3000);
+      // Hide back button, show only reset
+      document.getElementById('btnBack5').style.display = 'none';
+      document.getElementById('btnPreview5').style.display = 'none';
     } else {
       throw new Error(JSON.stringify(result.error));
     }
@@ -907,6 +906,8 @@ function resetApp() {
   document.querySelectorAll('#pay-firma, #pay-privat').forEach(c=>c.className='firma-card');
   selectBezahltVia('firma');
   document.querySelectorAll('.firma-card').forEach(c=>c.className='firma-card');
+  document.getElementById('btnBack5').style.display = '';
+  document.getElementById('btnPreview5').style.display = '';
   goTo(1);
 }
 
