@@ -897,7 +897,21 @@ async function generateAndSend() {
         subject: `Beleg: ${state.haendler||'–'} · ${state.datum||'–'} · ${state.betrag||'–'}`,
         body: emailBody,
         pdfBase64,
-        filename
+        filename,
+        logData: {
+          firma: state.firmaLabel||'',
+          empfaenger: state.firmaEmail||'',
+          haendler: state.haendler||'',
+          datum: state.datum||'',
+          betrag: state.betrag||'',
+          mwst: state.mwst||'',
+          kategorie: state.kategorieLabel||'',
+          skr03: state.kategorie||'',
+          zahlungsart: PM_LABELS[state.payment]||state.payment||'',
+          bezahltVia: state.bezahltVia==='privat' ? 'Privat (SKR03: 1700)' : 'Firmenkonto',
+          notiz: state.notiz||'',
+          bewirtung: state.isBewirtung ? `Ja — ${state.bewAnlass||''}` : 'Nein'
+        }
       })
     });
 
