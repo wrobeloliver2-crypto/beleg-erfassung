@@ -778,7 +778,14 @@ async function previewPDF() {
   try {
     const pdfBlob = await buildPDFBlob();
     const url = URL.createObjectURL(pdfBlob);
-    window.open(url, '_blank');
+    // iOS: use anchor click instead of window.open
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
   } catch(err) {
     showToast('⚠️ Fehler: ' + err.message);
   }
