@@ -55,26 +55,39 @@ async function getAccessToken(tenantId, clientId, clientSecret) {
 }
 
 async function logToSheet(webhookUrl, logData) {
+  // Google Apps Script redirects POST to GET — use GET with params as workaround
   return new Promise((resolve) => {
     try {
-      const url = new URL(webhookUrl);
-      const bodyStr = JSON.stringify(logData);
+      const params = encodeURIComponent(JSON.stringify(logData));
+      const url = new URL(webhookUrl + '?data=' + params);
       const options = {
         hostname: url.hostname,
         path: url.pathname + url.search,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(bodyStr)
-        }
+        method: 'GET'
       };
       const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => resolve(data));
+        // Follow redirect if needed
+        if (res.statusCode === 302 && res.headers.location) {
+          const redirUrl = new URL(res.headers.location);
+          const redirOptions = {
+            hostname: redirUrl.hostname,
+            path: redirUrl.pathname + redirUrl.search,
+            method: 'GET'
+          };
+          const req2 = https.request(redirOptions, (res2) => {
+            let data = '';
+            res2.on('data', chunk => data += chunk);
+            res2.on('end', () => resolve(data));
+          });
+          req2.on('error', () => resolve('redirect failed'));
+          req2.end();
+        } else {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => resolve(data));
+        }
       });
       req.on('error', () => resolve('sheet log failed silently'));
-      req.write(bodyStr);
       req.end();
     } catch(e) {
       resolve('sheet log error: ' + e.message);
