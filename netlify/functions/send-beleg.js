@@ -54,18 +54,47 @@ async function getAccessToken(tenantId, clientId, clientSecret) {
   });
 }
 
+async function logToSheet(webhookUrl, logData) {
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(webhookUrl);
+      const bodyStr = JSON.stringify(logData);
+      const options = {
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(bodyStr)
+        }
+      };
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve(data));
+      });
+      req.on('error', () => resolve('sheet log failed silently'));
+      req.write(bodyStr);
+      req.end();
+    } catch(e) {
+      resolve('sheet log error: ' + e.message);
+    }
+  });
+}
+
 exports.handler = async function(event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
-    const { to, subject, body, pdfBase64, filename } = JSON.parse(event.body);
+    const { to, subject, body, pdfBase64, filename, logData } = JSON.parse(event.body);
 
-    const tenantId    = process.env.AZURE_TENANT_ID;
-    const clientId    = process.env.AZURE_CLIENT_ID;
+    const tenantId     = process.env.AZURE_TENANT_ID;
+    const clientId     = process.env.AZURE_CLIENT_ID;
     const clientSecret = process.env.AZURE_CLIENT_SECRET;
-    const sender      = process.env.MAIL_SENDER;
+    const sender       = process.env.MAIL_SENDER;
+    const sheetUrl     = process.env.SHEET_WEBHOOK_URL;
 
     if (!tenantId || !clientId || !clientSecret || !sender) {
       return { statusCode: 500, body: JSON.stringify({ error: 'Missing env vars' }) };
@@ -97,12 +126,19 @@ exports.handler = async function(event) {
     );
 
     if (result.status === 202) {
+      // Log to Google Sheet
+      if (sheetUrl && logData) {
+        await logToSheet(sheetUrl, {
+          ...logData,
+          zeitstempel: new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })
+        });
+      }
       return { statusCode: 200, body: JSON.stringify({ success: true }) };
     } else {
       return { statusCode: result.status, body: JSON.stringify({ error: result.body }) };
     }
 
   } catch(err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message, stack: err.stack }) };
   }
 };
