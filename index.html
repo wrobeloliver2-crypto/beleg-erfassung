@@ -299,7 +299,7 @@
 <script>
 // ── State ──
 const state = {
-  imageFile: null, imageDataUrl: null, imageDataUrlSmall: null,
+  imageFile: null, imageDataUrl: null, imageDataUrlSmall: null, imageDataUrlHD: null,
   haendler:'', datum:'', betrag:'', mwst:'',
   kategorie:null, kategorieLabel:null,
   payment:null, bezahltVia:'firma', firma:null, firmaLabel:null, firmaEmail:null, notiz:'', isBewirtung:false, bewAnlass:'', bewTeilnehmer:'', bewGrund:''
@@ -623,9 +623,11 @@ document.getElementById('fileInput').addEventListener('change', async function(e
 });
 
 async function finishImageLoad(dataUrl) {
-  // Compress for display & PDF
-  state.imageDataUrl = await compressImage(dataUrl, 1200, 1600, 0.85);
-  // Compress for API
+  // HD for PDF (high quality, full resolution)
+  state.imageDataUrlHD = await compressImage(dataUrl, 2400, 3200, 0.95);
+  // Medium for display
+  state.imageDataUrl = await compressImage(dataUrl, 800, 1200, 0.82);
+  // Small for API analysis
   state.imageDataUrlSmall = await compressImage(dataUrl, 900, 1200, 0.75);
 
   const area = document.getElementById('photoArea');
@@ -810,16 +812,42 @@ async function buildPDFBlob() {
     y+=7;
   });
   y+=6; doc.setDrawColor(200,200,200); doc.line(m,y,pW-m,y); y+=8;
-  if (state.imageDataUrl) {
-    const iW=pW-m*2, iH=110;
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(100,100,100);
-    doc.text('BELEGFOTO',m,y); y+=4;
-    doc.addImage(state.imageDataUrl,'JPEG',m,y,iW,iH);
-  }
+  // Footer Seite 1
   doc.setDrawColor(220,220,220); doc.line(m,pH-14,pW-m,pH-14);
   doc.setFontSize(7); doc.setTextColor(160,160,160); doc.setFont('helvetica','normal');
   doc.text(`${state.firmaLabel||''} · ${state.firmaEmail||''}`, m, pH-8);
   doc.text(`Beleg-App · ${new Date().toLocaleDateString('de-DE')}`, pW-m, pH-8, {align:'right'});
+
+  // Seite 2: Belegfoto in voller Größe, proportional
+  if (state.imageDataUrlHD || state.imageDataUrl) {
+    const imgSrc = state.imageDataUrlHD || state.imageDataUrl;
+    const imgDims = await new Promise(resolve => {
+      const el = new Image();
+      el.onload = () => resolve({ w: el.naturalWidth, h: el.naturalHeight });
+      el.src = imgSrc;
+    });
+    doc.addPage();
+    // Header
+    if (state.firma==='physio') doc.setFillColor(85,114,94);
+    else doc.setFillColor(217,164,154);
+    doc.rect(0,0,pW,12,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('BELEGFOTO — ' + (state.haendler||'') + ' · ' + (state.datum||''), m, 8);
+    // Proportionale Größe
+    const maxW = pW - m*2;
+    const maxH = pH - 18;
+    let imgW = maxW;
+    let imgH = maxW * (imgDims.h / imgDims.w);
+    if (imgH > maxH) { imgH = maxH; imgW = maxH * (imgDims.w / imgDims.h); }
+    const imgX = (pW - imgW) / 2;
+    doc.addImage(imgSrc, 'JPEG', imgX, 14, imgW, imgH);
+    // Footer Seite 2
+    doc.setDrawColor(220,220,220); doc.line(m,pH-14,pW-m,pH-14);
+    doc.setFontSize(7); doc.setTextColor(160,160,160); doc.setFont('helvetica','normal');
+    doc.text(`${state.firmaLabel||''} · ${state.firmaEmail||''}`, m, pH-8);
+    doc.text(`Beleg-App · ${new Date().toLocaleDateString('de-DE')}`, pW-m, pH-8, {align:'right'});
+  }
+
   return doc.output('blob');
 }
 
@@ -892,7 +920,7 @@ async function generateAndSend() {
 
 // ── Reset ──
 function resetApp() {
-  Object.assign(state,{imageFile:null,imageDataUrl:null,imageDataUrlSmall:null,_rawDataUrl:null,haendler:'',datum:'',betrag:'',mwst:'',kategorie:null,kategorieLabel:null,payment:null,bezahltVia:'firma',firma:null,firmaLabel:null,firmaEmail:null,notiz:'',isBewirtung:false,bewAnlass:'',bewTeilnehmer:'',bewGrund:''});
+  Object.assign(state,{imageFile:null,imageDataUrl:null,imageDataUrlSmall:null,imageDataUrlHD:null,_rawDataUrl:null,haendler:'',datum:'',betrag:'',mwst:'',kategorie:null,kategorieLabel:null,payment:null,bezahltVia:'firma',firma:null,firmaLabel:null,firmaEmail:null,notiz:'',isBewirtung:false,bewAnlass:'',bewTeilnehmer:'',bewGrund:''});
   const area=document.getElementById('photoArea');
   area.className='photo-area';
   area.innerHTML='<span class="photo-icon">📷</span><span class="photo-hint">Tippen um Foto aufzunehmen</span>';
